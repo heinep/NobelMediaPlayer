@@ -5,14 +5,43 @@ var exec =      require('child_process').exec;
 var srv =       require('socket.io').listen(8080);
 var Mopidy =    require('mopidy');
 var colors =    require('colors');
+var fs =        require('fs');
 
 var password = 1337;
+var playlistsFile = "disabled_playlists.txt";
+var disabledPlaylists = [];
 var revision;
 
 var mopidy = new Mopidy({
 	webSocketUrl: 'ws://localhost:6680/mopidy/ws/',
 	autoConnect: true
 });
+
+process.chdir(__dirname);
+
+loadEnabledPlaylists('change', playlistsFile);
+fs.watch(__dirname, loadEnabledPlaylists);
+
+function loadEnabledPlaylists(event, filename)
+{
+    if (event == 'change' && filename == playlistsFile)
+    {
+        fs.readFile(filename, 'utf8', function(err, data) {
+            if (err)
+            {
+                logM('Error reading playlist file. Error=<' + err + '>', 'red');
+                return;
+            }
+
+            disabledPlaylists = [];
+            var lines = data.split(/\r?\n/);
+            lines.forEach(function(line)
+            {
+                disabledPlaylists.push(line.toLowerCase());
+            });
+        });
+    }
+}
 
 var consoleError = console.error.bind(console);
 
@@ -97,7 +126,13 @@ srv.sockets.on('connection', function (socket) {
         logC(socket.id, 'requested playlists.');
         mopidy.playlists.getPlaylists().then(
             function(playlists) {
-                socket.emit('playlists', playlists);
+                var enabledPlaylists = [];
+                playlists.forEach(function(playlist) {
+                    playlist.name = playlist.name.split(' by ')[0].trim(); 
+                    if (disabledPlaylists.indexOf(playlist.name.toLowerCase()) == -1)
+                        enabledPlaylists.push(playlist);
+                });
+                socket.emit('playlists', enabledPlaylists);
             }, consoleError
         )
     });
@@ -271,7 +306,7 @@ srv.sockets.on('connection', function (socket) {
         mopidy.library.search({any: data}, uris=['spotify:']).then(
             function (result) {
                 console.log('['.yellow, '        SERVER      '.white, ']'.yellow, 'Received search result.');
-                if (result) {
+                if (result && result.length > 0) {
                     var tracks = result[0].tracks;
                     socket.emit('search-result', tracks);
                 } else {
