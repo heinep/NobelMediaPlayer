@@ -512,7 +512,6 @@ function updatePlaylists(playlists) {
     if (playlists) {
         $('.playlists tbody').empty();
         $(playlists).each(function (i, playlist) {
-            playlist.name = playlist.name.split('by')[0].trim();
             if (playlist.name !== 'Starred') {
                 $('.playlists tbody').append(
                         '<tr><td class="btn-load-playlist" data-uri="' + playlist.uri + '">' + playlist.name + '</td></tr>'
