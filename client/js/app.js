@@ -1,4 +1,4 @@
-var host = 'http://nobelix:8080/';
+var host = 'http://knox-mc:8010/';
 var client = io.connect(host);
 
 var currentPage;
@@ -15,6 +15,8 @@ var slider;
 var playlistDisplaying = false;
 
 var version = '0.3';
+
+var touchMode = isInTouchMode();
 
 client = io.connect(host);
 
@@ -152,17 +154,25 @@ function removeListeners() {
 function fixEvents() {
     playlistDisplaying = false;
     clearInterval(connectTimer);
-    $.keyboard.keyaction.enter = function (base) {
-        base.accept();      // accept the content
-        $('.btn-admin-submit').click(); // submit form on enter
-        $('#loginModal').modal('hide');
-    };
-    $('.admin-password').keyboard({
-        accepted: function() {
+    if (touchMode) {
+        $.keyboard.keyaction.enter = function (base) {
+            base.accept();      // accept the content
             $('.btn-admin-submit').click(); // submit form on enter
             $('#loginModal').modal('hide');
-        }
-    });
+        };
+        $('.admin-password').keyboard({
+            accepted: function() {
+                $('.btn-admin-submit').click(); // submit form on enter
+                $('#loginModal').modal('hide');
+            }
+        });
+    } else {
+        $('.admin-password').keydown(function (key) {
+            // submit form on enter
+            if (key.which == 13)
+                $('.btn-admin-submit').click();
+        });
+    }
     // unbind all click eventhandlers
     $('*', document).unbind('click');
 
@@ -243,10 +253,14 @@ function requestGlobals() {
     client.emit('request-volume');
 }
 
+function loadSection(id) {
+    return 'sections.html?d=' + new Date().getTime() + ' ' + id;
+}
+
 // Loads the page from sections.php, and binds events on its buttons.
 function loadTracklistPage() {
     console.log('Loading tracklist page...');
-    $('.content').hide().empty().load('sections.html #tracklist', function () {
+    $('.content').hide().empty().load(loadSection('#tracklist'), function () {
         currentPage = 'tracklist';
         client.emit('request-tracklist');
 
@@ -286,7 +300,7 @@ function loadTracklistPage() {
 function loadLibraryPage() {
     currentPage = 'library';
     console.log('Loading library page...');
-    $('.content').hide().empty().load('sections.html #library', function () {
+    $('.content').hide().empty().load(loadSection('#library'), function () {
         // This happens after the AJAX request
         $('.btn-append-playlist').hide();
         playlistDisplaying = false;
@@ -312,14 +326,22 @@ function loadLibraryPage() {
             client.emit('request-load-playlist', uri);
         });
 
-        // settings for the touch keyboard
-        $.keyboard.keyaction.enter = function (base) {
-            base.accept();      // accept the content
-            $('.btn-search').click(); // submit form on enter
-        };
+        if (touchMode) {
+            // settings for the touch keyboard
+            $.keyboard.keyaction.enter = function (base) {
+                base.accept();      // accept the content
+                $('.btn-search').click(); // submit form on enter
+            };
 
-        $('.input-search').keyboard();
-        console.log($('.input-search'));
+            $('.input-search').keyboard();
+            console.log($('.input-search'));
+        } else {        
+            $('.input-search').keydown(function (key) {
+            // submit form on enter
+            if (key.which == 13)
+                $('.btn-search').click();
+        });
+        }
 
         handleAdminMode();
     });
@@ -678,4 +700,16 @@ function setFullScreen(fullscreen) {
 function getFullscreen() {
     return (document.fullScreenElement && document.fullScreenElement !== null) ||
         (!document.mozFullScreen && !document.webkitIsFullScreen);
+}
+
+function isInTouchMode() {
+    switch ($.urlParam('touch')) {
+        case 'off':
+        case 'false':
+        case 'disabled':
+        case '0':
+            return false;
+        default: 
+            return true;
+    }
 }
